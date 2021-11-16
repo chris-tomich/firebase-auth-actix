@@ -1,10 +1,15 @@
-use std::{future::Ready, pin::Pin};
+use std::pin::Pin;
 
 use actix_service::{Service, Transform};
-use actix_web::{dev::{ServiceRequest, ServiceResponse}, http::Error};
-use futures::{Future, future::{ok}};
+use actix_web::{HttpMessage, dev::{ServiceRequest, ServiceResponse}, http::Error};
+use firebase_auth::TokenValidator;
+use futures::{Future, future::{ok, Ready}};
 
-pub struct FirebaseAuthentication;
+pub struct FirebaseAuthentication {
+    pub firebase_project_id: String,
+    pub firebase_project_issuer: String,
+    pub firebase_public_keys_jwk_url: String,
+}
 
 impl<S, B> Transform<S, ServiceRequest> for FirebaseAuthentication
 where
@@ -23,12 +28,20 @@ B: 'static,
     type Future = Ready<Result<Self::Transform, Self::InitError>>;
 
     fn new_transform(&self, service: S) -> Self::Future {
-        todo!()
+        ok(FirebaseAuthenticationMiddleware {
+            service,
+            base_token_validator: TokenValidator {
+                firebase_project_id: self.firebase_project_id.clone(),
+                firebase_project_issuer: self.firebase_project_issuer.clone(),
+                firebase_public_keys_jwk_url: self.firebase_public_keys_jwk_url.clone(),
+            },
+        })
     }
 }
 
 pub struct FirebaseAuthenticationMiddleware<S> {
     service: S,
+    base_token_validator: TokenValidator,
 }
 
 impl<S, B> Service<ServiceRequest> for FirebaseAuthenticationMiddleware<S>
@@ -42,14 +55,21 @@ B: 'static,
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
 
     fn poll_ready(&self, ctx: &mut core::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
-        todo!()
+        self.service.poll_ready(ctx)
     }
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        todo!()
-    }
+        let token_validator = self.base_token_validator.clone();
+        req.extensions_mut().insert(token_validator);
 
-    
+        let fut = self.service.call(req);
+
+        Box::pin(async move {
+            let res = fut.await?;
+
+            Ok(res)
+        })
+    }
 }
 
 #[cfg(test)]

@@ -1,7 +1,6 @@
 use std::pin::Pin;
 
-use actix_service::{Service, Transform};
-use actix_web::{HttpMessage, dev::{ServiceRequest, ServiceResponse}, http::Error};
+use actix_web::{HttpMessage, dev::{Service, Transform, ServiceRequest, ServiceResponse}, http::Error};
 use firebase_auth::TokenValidator;
 use futures::{Future, future::{ok, Ready}};
 
@@ -11,12 +10,14 @@ pub struct FirebaseAuthentication {
     pub firebase_public_keys_jwk_url: String,
 }
 
-impl<S, B> Transform<S, ServiceRequest> for FirebaseAuthentication
+impl<S, B> Transform<S> for FirebaseAuthentication
 where
-S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
+S: Service<Request = ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
 S::Future: 'static,
 B: 'static,
 {
+    type Request = ServiceRequest;
+
     type Response = ServiceResponse<B>;
 
     type Error = Error;
@@ -44,21 +45,25 @@ pub struct FirebaseAuthenticationMiddleware<S> {
     base_token_validator: TokenValidator,
 }
 
-impl<S, B> Service<ServiceRequest> for FirebaseAuthenticationMiddleware<S>
+impl<S, B> Service for FirebaseAuthenticationMiddleware<S>
 where
-S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
+S: Service<Request = ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
 S::Future: 'static,
 B: 'static,
 {
+    type Request = ServiceRequest;
+
     type Response = ServiceResponse<B>;
+
     type Error = Error;
+
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
 
-    fn poll_ready(&self, ctx: &mut core::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, ctx: &mut core::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
         self.service.poll_ready(ctx)
     }
 
-    fn call(&self, req: ServiceRequest) -> Self::Future {
+    fn call(&mut self, req: ServiceRequest) -> Self::Future {
         let token_validator = self.base_token_validator.clone();
         req.extensions_mut().insert(token_validator);
 

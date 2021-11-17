@@ -1,6 +1,6 @@
 use std::pin::Pin;
 
-use actix_web::{HttpMessage, dev::{Service, Transform, ServiceRequest, ServiceResponse}, http::Error};
+use actix_web::{HttpMessage, dev::{Service, Transform, ServiceRequest, ServiceResponse}, Error};
 use firebase_auth::TokenValidator;
 use futures::{Future, future::{ok, Ready}};
 
